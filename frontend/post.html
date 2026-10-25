@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Read Story | BlogSphere</title>
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .page-wrap {
+            max-width: 900px;
+            margin: 35px auto;
+            padding: 0 20px 50px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            font-weight: 600;
+        }
+
+        .article-card, .comments-card {
+            background: #fff;
+            border: 1px solid #e8e9f1;
+            border-radius: 18px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .article-card h1 {
+            font-size: clamp(30px, 5vw, 46px);
+            margin: 20px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .article-meta {
+            color: #777f93;
+            font-size: 14px;
+            margin-bottom: 28px;
+        }
+
+        .article-content {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.9;
+            font-size: 17px;
+            color: #333c50;
+        }
+
+        .article-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .secondary-button {
+            display: inline-block;
+            padding: 12px 16px;
+            border: 1px solid #dfe2ec;
+            border-radius: 10px;
+            color: #182033;
+            background: #fff;
+            font: inherit;
+            font-weight: 650;
+            cursor: pointer;
+        }
+
+        .danger-button {
+            color: #b42318;
+            border-color: #f1c7c4;
+        }
+
+        .comment-form {
+            display: grid;
+            gap: 12px;
+            margin: 22px 0 30px;
+        }
+
+        .comment-form textarea {
+            width: 100%;
+            min-height: 100px;
+            resize: vertical;
+            border: 1px solid #dfe2ec;
+            border-radius: 10px;
+            padding: 14px;
+            font: inherit;
+        }
+
+        .comment-item {
+            padding: 18px 0;
+            border-top: 1px solid #eceef4;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .comment-date {
+            font-size: 12px;
+            color: #8a91a3;
+        }
+
+        .comment-content {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            line-height: 1.65;
+        }
+
+        .small-delete {
+            border: 0;
+            background: transparent;
+            color: #b42318;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .notice {
+            color: #737b90;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 600px) {
+            .article-card, .comments-card {
+                padding: 22px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <a class="brand" href="index.html">Blog<span>Sphere</span></a>
+        <nav class="nav-links">
+            <a href="index.html">Explore Stories</a>
+            <a href="create-post.html" id="writeLink">Write a Story</a>
+        </nav>
+    </header>
+
+    <main class="page-wrap">
+        <a class="back-link" href="index.html">← Back to stories</a>
+
+        <p id="pageMessage" class="notice">Loading story...</p>
+
+        <article id="articleCard" class="article-card" hidden>
+            <span id="postCategory" class="category-tag"></span>
+            <h1 id="postTitle"></h1>
+            <p id="postMeta" class="article-meta"></p>
+            <div id="postContent" class="article-content"></div>
+
+            <div id="articleActions" class="article-actions" hidden>
+                <button id="editPostButton" class="primary-button" type="button">
+                    Edit Story
+                </button>
+                <button id="deletePostButton"
+                        class="secondary-button danger-button" type="button">
+                    Delete Story
+                </button>
+            </div>
+        </article>
+
+        <section class="comments-card">
+            <h2>Comments 💬</h2>
+            <p id="commentNotice" class="notice"></p>
+
+            <form id="commentForm" class="comment-form" hidden>
+                <label for="commentInput">Share your thoughts</label>
+                <textarea id="commentInput"
+                          maxlength="2000"
+                          placeholder="Write a helpful comment..."
+                          required></textarea>
+                <button class="primary-button" type="submit">Post Comment</button>
+                <p id="commentMessage" class="form-message" role="status"></p>
+            </form>
+
+            <div id="commentsList"></div>
+        </section>
+    </main>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const postId = Number(params.get("id"));
+        const token = localStorage.getItem("blogsphere_token");
+
+        let currentPost = null;
+        let currentUser = null;
+
+        try {
+            currentUser = JSON.parse(
+                localStorage.getItem("blogsphere_user") || "null"
+            );
+        } catch {
+            currentUser = null;
+        }
+
+        const pageMessage = document.getElementById("pageMessage");
+        const articleCard = document.getElementById("articleCard");
+        const commentForm = document.getElementById("commentForm");
+        const commentsList = document.getElementById("commentsList");
+        const commentNotice = document.getElementById("commentNotice");
+        const commentMessage = document.getElementById("commentMessage");
+
+        function formatDate(value) {
+            const date = new Date(value);
+            return Number.isNaN(date.getTime())
+                ? "Recently"
+                : date.toLocaleString();
+        }
+
+        function element(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        async function apiRequest(url, options = {}) {
+            const headers = { ...(options.headers || {}) };
+
+            if (token) {
+                headers.Authorization = "Bearer " + token;
+            }
+
+            if (options.body) {
+                headers["Content-Type"] = "application/json";
+            }
+
+            const response = await fetch(url, {
+                ...options,
+                headers
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(data.message || "Request failed.");
+            }
+
+            return data;
+        }
+
+        async function loadPost() {
+            if (!Number.isInteger(postId) || postId < 1) {
+                pageMessage.textContent = "Invalid blog post ID.";
+                return;
+            }
+
+            try {
+                const data = await apiRequest("/api/posts/" + postId);
+                currentPost = data.post;
+
+                document.title = currentPost.title + " | BlogSphere";
+                document.getElementById("postCategory").textContent =
+                    currentPost.category || "General";
+                document.getElementById("postTitle").textContent =
+                    currentPost.title;
+                document.getElementById("postMeta").textContent =
+                    "By " + currentPost.author_name +
+                    " · " + formatDate(currentPost.created_at);
+                document.getElementById("postContent").textContent =
+                    currentPost.content;
+
+                const ownPost = currentUser &&
+                    Number(currentUser.id) === Number(currentPost.author_id);
+
+                if (ownPost && token) {
+                    document.getElementById("articleActions").hidden = false;
+
+                    document.getElementById("editPostButton")
+                        .addEventListener("click", () => {
+                            window.location.href =
+                                "edit-post.html?id=" + encodeURIComponent(postId);
+                        });
+
+                    document.getElementById("deletePostButton")
+                        .addEventListener("click", deletePost);
+                }
+
+                articleCard.hidden = false;
+                pageMessage.hidden = true;
+
+                if (token) {
+                    commentForm.hidden = false;
+                } else {
+                    commentNotice.textContent =
+                        "Log in to add a comment.";
+                    const link = element("a", "", "Log in");
+                    link.href = "login.html";
+                    commentNotice.appendChild(document.createTextNode(" "));
+                    commentNotice.appendChild(link);
+                }
+
+                await loadComments();
+            } catch (error) {
+                pageMessage.textContent = error.message;
+            }
+        }
+
+        async function loadComments() {
+            try {
+                const data = await apiRequest(
+                    "/api/comments/post/" + postId
+                );
+
+                commentsList.replaceChildren();
+
+                if (!data.comments || data.comments.length === 0) {
+                    commentsList.appendChild(
+                        element("p", "notice", "No comments yet. Start the conversation!")
+                    );
+                    return;
+                }
+
+                data.comments.forEach((comment) => {
+                    const item = element("article", "comment-item");
+                    const header = element("div", "comment-header");
+
+                    const authorInfo = element("div");
+                    authorInfo.appendChild(
+                        element("strong", "", comment.author_name)
+                    );
+                    authorInfo.appendChild(
+                        element("div", "comment-date", formatDate(comment.created_at))
+                    );
+
+                    header.appendChild(authorInfo);
+
+                    const ownComment = currentUser &&
+                        Number(currentUser.id) === Number(comment.author_id);
+
+                    if (ownComment && token) {
+                        const deleteButton = element(
+                            "button", "small-delete", "Delete"
+                        );
+                        deleteButton.type = "button";
+                        deleteButton.addEventListener("click", () => {
+                            deleteComment(comment.id);
+                        });
+                        header.appendChild(deleteButton);
+                    }
+
+                    item.appendChild(header);
+                    item.appendChild(
+                        element("div", "comment-content", comment.content)
+                    );
+
+                    commentsList.appendChild(item);
+                });
+            } catch (error) {
+                commentsList.replaceChildren(
+                    element("p", "notice", error.message)
+                );
+            }
+        }
+
+        commentForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const input = document.getElementById("commentInput");
+            const content = input.value.trim();
+
+            if (!content) return;
+
+            const button = commentForm.querySelector("button[type='submit']");
+            button.disabled = true;
+            commentMessage.textContent = "Posting comment...";
+
+            try {
+                const data = await apiRequest(
+                    "/api/comments/post/" + postId,
+                    {
+                        method: "POST",
+                        body: JSON.stringify({ content })
+                    }
+                );
+
+                commentMessage.textContent = data.message;
+                commentMessage.className = "form-message success";
+                input.value = "";
+
+                await loadComments();
+            } catch (error) {
+                commentMessage.textContent = error.message;
+                commentMessage.className = "form-message error";
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        async function deleteComment(commentId) {
+            if (!confirm("Delete this comment?")) return;
+
+            try {
+                await apiRequest("/api/comments/" + commentId, {
+                    method: "DELETE"
+                });
+                await loadComments();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function deletePost() {
+            if (!confirm("Delete this story and its comments?")) return;
+
+            try {
+                const data = await apiRequest("/api/posts/" + postId, {
+                    method: "DELETE"
+                });
+
+                alert(data.message);
+                window.location.href = "index.html";
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        loadPost();
+    </script>
+</body>
+</html>

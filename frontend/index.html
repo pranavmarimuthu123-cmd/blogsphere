@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlogSphere — Ideas Worth Sharing</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .navbar {
+            background: #fff;
+            border-bottom: 1px solid #e8e9f1;
+            padding: 18px 6%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-links a {
+            font-weight: 600;
+        }
+
+        .hero {
+            padding: 65px 6%;
+            background: linear-gradient(120deg, #eeeaff, #faf9ff);
+        }
+
+        .hero h1 {
+            max-width: 750px;
+            font-size: clamp(36px, 5vw, 62px);
+            line-height: 1.08;
+        }
+
+        .hero p {
+            max-width: 620px;
+            color: #737b90;
+            line-height: 1.8;
+            font-size: 18px;
+        }
+
+        .content {
+            max-width: 1200px;
+            padding: 45px 24px;
+            margin: auto;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        .search-input {
+            max-width: 320px;
+        }
+
+        .posts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+            gap: 24px;
+        }
+
+        .post-card {
+            background: #fff;
+            border: 1px solid #e8e9f1;
+            border-radius: 18px;
+            padding: 25px;
+            box-shadow: 0 8px 30px rgba(31, 35, 70, .04);
+            display: flex;
+            flex-direction: column;
+            min-height: 260px;
+        }
+
+        .category-tag {
+            display: inline-block;
+            background: #eeeaff;
+            color: #6554e8;
+            padding: 6px 11px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: 700;
+            align-self: flex-start;
+        }
+
+        .post-card h3 {
+            margin: 18px 0 10px;
+            font-size: 22px;
+        }
+
+        .post-excerpt {
+            color: #737b90;
+            line-height: 1.7;
+            white-space: pre-line;
+            overflow-wrap: anywhere;
+        }
+
+        .post-meta {
+            color: #8a91a3;
+            font-size: 13px;
+            margin-top: auto;
+            padding-top: 18px;
+        }
+
+        .post-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .read-link {
+            font-weight: 700;
+        }
+
+        .empty-state, .status-message {
+            text-align: center;
+            padding: 35px 15px;
+            color: #737b90;
+        }
+
+        footer {
+            text-align: center;
+            padding: 28px;
+            color: #737b90;
+            border-top: 1px solid #e8e9f1;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+    <header class="navbar">
+        <a class="brand" href="index.html">Blog<span>Sphere</span></a>
+
+        <nav class="nav-links" id="navLinks">
+            <a href="#blogs">Explore</a>
+            <a href="login.html" id="loginLink">Log In</a>
+            <a href="register.html" id="registerLink">Join Us</a>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <span class="category-tag">A COMMUNITY OF IDEAS</span>
+        <h1>Every great idea deserves a <span style="color:#6554e8">story.</span></h1>
+        <p>
+            Discover fresh perspectives, share what you know, and connect
+            with people through stories that matter.
+        </p>
+        <a href="create-post.html" class="primary-button" id="writeButton"
+           style="display:inline-block;margin-top:12px">✍️ Write a Story</a>
+    </section>
+
+    <main class="content" id="blogs">
+        <div class="section-heading">
+            <div>
+                <h2>Explore Stories</h2>
+                <p class="muted">Ideas, experiences, and perspectives from our community.</p>
+            </div>
+
+            <input
+                id="searchInput"
+                class="search-input"
+                type="search"
+                placeholder="Search stories..."
+                aria-label="Search stories"
+            >
+        </div>
+
+        <p id="statusMessage" class="status-message">Loading stories...</p>
+        <section id="postsGrid" class="posts-grid"></section>
+    </main>
+
+    <footer>
+        © 2026 BlogSphere. Built for ideas worth sharing.
+    </footer>
+
+    <script>
+        const postsGrid = document.getElementById("postsGrid");
+        const statusMessage = document.getElementById("statusMessage");
+        const searchInput = document.getElementById("searchInput");
+
+        let allPosts = [];
+
+        const token = localStorage.getItem("blogsphere_token");
+        const storedUser = localStorage.getItem("blogsphere_user");
+
+        if (token && storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+
+                const navLinks = document.getElementById("navLinks");
+                document.getElementById("loginLink").remove();
+                document.getElementById("registerLink").remove();
+
+                const greeting = document.createElement("span");
+                greeting.textContent = `Hi, ${user.name}`;
+                navLinks.appendChild(greeting);
+
+                const logout = document.createElement("a");
+                logout.href = "#";
+                logout.textContent = "Log Out";
+                logout.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    localStorage.removeItem("blogsphere_token");
+                    localStorage.removeItem("blogsphere_user");
+                    window.location.reload();
+                });
+                navLinks.appendChild(logout);
+            } catch (error) {
+                localStorage.removeItem("blogsphere_user");
+            }
+        } else {
+            document.getElementById("writeButton").href = "login.html";
+        }
+
+        function safeDate(value) {
+            const date = new Date(value);
+            return Number.isNaN(date.getTime())
+                ? "Recently"
+                : date.toLocaleDateString();
+        }
+
+        function makeText(tag, className, text) {
+            const element = document.createElement(tag);
+            if (className) element.className = className;
+            element.textContent = text;
+            return element;
+        }
+
+        function renderPosts(posts) {
+            postsGrid.replaceChildren();
+
+            if (!posts.length) {
+                statusMessage.textContent = "No stories found. Be the first to publish one!";
+                statusMessage.hidden = false;
+                return;
+            }
+
+            statusMessage.hidden = true;
+
+            posts.forEach((post) => {
+                const card = document.createElement("article");
+                card.className = "post-card";
+
+                card.appendChild(
+                    makeText("span", "category-tag", post.category || "General")
+                );
+
+                card.appendChild(makeText("h3", "", post.title));
+
+                const excerpt = (post.content || "").slice(0, 180);
+                card.appendChild(
+                    makeText(
+                        "p",
+                        "post-excerpt",
+                        excerpt + ((post.content || "").length > 180 ? "..." : "")
+                    )
+                );
+
+                card.appendChild(
+                    makeText(
+                        "p",
+                        "post-meta",
+                        `By ${post.author_name} · ${safeDate(post.created_at)} · ${post.comment_count} comments`
+                    )
+                );
+
+                const actions = document.createElement("div");
+                actions.className = "post-actions";
+
+                const readLink = document.createElement("a");
+                readLink.className = "read-link";
+                readLink.href = `post.html?id=${encodeURIComponent(post.id)}`;
+                readLink.textContent = "Read story →";
+
+                actions.appendChild(readLink);
+                card.appendChild(actions);
+                postsGrid.appendChild(card);
+            });
+        }
+
+        async function loadPosts() {
+            try {
+                const response = await fetch("/api/posts");
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Could not load stories.");
+                }
+
+                allPosts = data.posts || [];
+                renderPosts(allPosts);
+            } catch (error) {
+                statusMessage.textContent =
+                    "Unable to load stories. Please refresh the page.";
+                statusMessage.hidden = false;
+                console.error(error);
+            }
+        }
+
+        searchInput.addEventListener("input", () => {
+            const query = searchInput.value.trim().toLowerCase();
+
+            const filtered = allPosts.filter((post) =>
+                [post.title, post.content, post.author_name, post.category]
+                    .some((value) => (value || "").toLowerCase().includes(query))
+            );
+
+            renderPosts(filtered);
+        });
+
+        loadPosts();
+    </script>
+</body>
+</html>

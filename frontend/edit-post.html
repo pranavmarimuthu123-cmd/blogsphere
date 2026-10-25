@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Story | BlogSphere</title>
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        .editor-container {
+            max-width: 850px;
+            margin: 45px auto;
+            padding: 0 20px;
+        }
+
+        .editor-card {
+            background: #fff;
+            padding: 35px;
+            border: 1px solid #e8e9f1;
+            border-radius: 20px;
+        }
+
+        .editor-card label {
+            display: block;
+            margin: 22px 0 8px;
+            font-weight: 700;
+        }
+
+        .editor-card input,
+        .editor-card textarea,
+        .editor-card select {
+            width: 100%;
+            padding: 14px;
+            border: 1px solid #dfe2ec;
+            border-radius: 10px;
+            font: inherit;
+        }
+
+        .editor-card textarea {
+            min-height: 300px;
+            resize: vertical;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="navbar">
+        <a class="brand" href="index.html">Blog<span>Sphere</span></a>
+        <nav class="nav-links">
+            <a href="index.html">Explore Stories</a>
+        </nav>
+    </header>
+
+    <main class="editor-container">
+        <section class="editor-card">
+            <h1>Edit your story</h1>
+            <p class="muted">Update your title, category, or content.</p>
+
+            <form id="editForm">
+                <label for="title">Title</label>
+                <input id="title" maxlength="200" required>
+
+                <label for="category">Category</label>
+                <select id="category">
+                    <option>Technology</option>
+                    <option>Education</option>
+                    <option>Business</option>
+                    <option>Lifestyle</option>
+                    <option>Programming</option>
+                    <option>Personal</option>
+                    <option>General</option>
+                </select>
+
+                <label for="content">Content</label>
+                <textarea id="content" required></textarea>
+
+                <button class="primary-button" type="submit">Save Changes</button>
+                <a href="index.html" style="margin-left:12px">Cancel</a>
+
+                <p id="message" class="form-message" role="status"></p>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        const token = localStorage.getItem("blogsphere_token");
+        let currentUser = null;
+
+        try {
+            currentUser = JSON.parse(
+                localStorage.getItem("blogsphere_user") || "null"
+            );
+        } catch {
+            currentUser = null;
+        }
+
+        const postId = Number(
+            new URLSearchParams(window.location.search).get("id")
+        );
+
+        const form = document.getElementById("editForm");
+        const message = document.getElementById("message");
+        let loadedPost = null;
+
+        if (!token) {
+            window.location.replace("login.html");
+        }
+
+        async function request(url, options = {}) {
+            const headers = {
+                Authorization: "Bearer " + token,
+                ...(options.body ? { "Content-Type": "application/json" } : {})
+            };
+
+            const response = await fetch(url, { ...options, headers });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(data.message || "Request failed.");
+            }
+
+            return data;
+        }
+
+        async function loadPost() {
+            try {
+                if (!Number.isInteger(postId) || postId < 1) {
+                    throw new Error("Invalid post ID.");
+                }
+
+                const data = await request("/api/posts/" + postId);
+                loadedPost = data.post;
+
+                if (
+                    !currentUser ||
+                    Number(currentUser.id) !== Number(loadedPost.author_id)
+                ) {
+                    throw new Error("You can edit only your own stories.");
+                }
+
+                document.getElementById("title").value = loadedPost.title;
+                document.getElementById("content").value = loadedPost.content;
+
+                const category = document.getElementById("category");
+                const optionExists = Array.from(category.options)
+                    .some(option => option.value === loadedPost.category);
+
+                if (!optionExists && loadedPost.category) {
+                    category.add(new Option(loadedPost.category, loadedPost.category));
+                }
+
+                category.value = loadedPost.category || "General";
+            } catch (error) {
+                message.textContent = error.message;
+                message.className = "form-message error";
+                form.querySelector("button[type='submit']").disabled = true;
+            }
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const title = document.getElementById("title").value.trim();
+            const content = document.getElementById("content").value.trim();
+            const category = document.getElementById("category").value;
+
+            if (!title || !content) {
+                message.textContent = "Title and content are required.";
+                message.className = "form-message error";
+                return;
+            }
+
+            const button = form.querySelector("button[type='submit']");
+            button.disabled = true;
+
+            try {
+                const data = await request("/api/posts/" + postId, {
+                    method: "PUT",
+                    body: JSON.stringify({ title, content, category })
+                });
+
+                message.textContent = data.message;
+                message.className = "form-message success";
+
+                setTimeout(() => {
+                    window.location.href = "post.html?id=" + postId;
+                }, 700);
+            } catch (error) {
+                message.textContent = error.message;
+                message.className = "form-message error";
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        if (token) loadPost();
+    </script>
+</body>
+</html>
